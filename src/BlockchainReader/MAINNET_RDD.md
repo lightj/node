@@ -1,11 +1,3 @@
-# Blockchain Reader
-
-Short description of the module.
-
-## Configuration
-
-...
-
 ## Reading from the Bitcoin Blockchain
 
 Po.et uses the `OP_RETURN` opcode to store a reference to batched claims. Any `OP_RETURN` data that begins with `POET` is assumed to be a `POET` message.

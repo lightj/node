@@ -3,6 +3,8 @@ import { Db, MongoClient } from 'mongodb'
 import * as Pino from 'pino'
 
 import { createModuleLogger } from 'Helpers/Logging'
+import { secondsToMiliseconds } from 'Helpers/Time'
+import { Exchange } from 'Messaging/Messages'
 import { Messaging } from 'Messaging/Messaging'
 
 import { BatchWriterConfiguration } from './BatchWriterConfiguration'
@@ -22,7 +24,6 @@ export class BatchWriter {
   private fileCollection: FileCollection
   private router: Router
   private messaging: Messaging
-  private service: Service
 
   constructor(configuration: BatchWriterConfiguration) {
     this.configuration = configuration
@@ -34,8 +35,10 @@ export class BatchWriter {
     const mongoClient = await MongoClient.connect(this.configuration.dbUrl)
     this.dbConnection = await mongoClient.db()
 
+    // TODO: don't new FileCollection, let the container instantiate it
+    // container = factory
     this.fileCollection = new FileCollection(this.dbConnection.collection('batchWriter'))
-    await this.fileCollection.init()
+    await this.fileCollection.start()
 
     this.messaging = new Messaging(this.configuration.rabbitmqUrl)
     await this.messaging.start()
@@ -45,8 +48,7 @@ export class BatchWriter {
     this.router = this.container.get('Router')
     await this.router.start()
 
-    this.service = this.container.get('Service')
-    await this.service.start()
+    this.startIntervals()
 
     this.logger.info('Batcher Started')
   }
@@ -65,5 +67,12 @@ export class BatchWriter {
     this.container.bind<ServiceConfiguration>('ServiceConfiguration').toConstantValue({
       createNextBatchIntervalInSeconds: this.configuration.createNextBatchIntervalInSeconds,
     })
+  }
+
+  startIntervals() {
+    setInterval(
+      () => this.messaging.publish(Exchange.BatchWriterCreateNextBatchRequest, ''),
+      secondsToMiliseconds(this.configuration.createNextBatchIntervalInSeconds)
+    )
   }
 }
